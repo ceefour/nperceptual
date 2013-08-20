@@ -1,0 +1,44 @@
+h1. nperceptual
+
+Finger points and gesture recognition library using "Intel Perceptual SDK":.
+
+h2. Usage
+
+The main entry point of the library is the @PerceptualManager@ class.
+
+Sample code to display "perceptual cursor" using any WPF Shape/Component.
+
+bc.
+public MainWindow()
+{
+    InitializeComponent();
+    InitPerceptual();
+}
+
+private void InitPerceptual()
+{
+    perceptualMgr.Init();
+    perceptualMgr.Start();
+    perceptualMgr.HandGeoNode += HandGeoNodeHandler;
+}
+
+private void Window_Unloaded(object sender, RoutedEventArgs e)
+{
+    perceptualMgr.Dispose();
+}
+
+private void Window_Closed(object sender, EventArgs e)
+{
+    perceptualMgr.Dispose();
+}
+
+private void HandGeoNodeHandler(PXCMGesture.GeoNode.Label label, PXCMPoint3DF32 positionWorld)
+{
+    Dispatcher.InvokeAsync(delegate()
+    {
+        hand.Margin = new Thickness(
+            (Width / 2) + (-positionWorld.x / 0.15d * (Width / 2)),
+            (Height / 2) + (-positionWorld.z / 0.15d * (Height / 2)),
+            0, 0);
+    });
+}

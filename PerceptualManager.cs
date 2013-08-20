@@ -159,11 +159,13 @@ namespace nperceptual
                             // GeoNode
                             PXCMGesture.GeoNode primaryGeo;
                             gesture.QueryNodeData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, out primaryGeo);
-                            log.InfoFormat("Primary Geo [{0} {1} {2}] [{3} {4} {5}]",
+                            log.InfoFormat("Primary Geo c={0} o={1}/{2} [{3} {4} {5}] [{6} {7} {8}]",
+                                primaryGeo.confidence, primaryGeo.openness, primaryGeo.opennessState,
                                 primaryGeo.positionImage.x, primaryGeo.positionImage.y, primaryGeo.positionImage.z,
                                 primaryGeo.positionWorld.x, primaryGeo.positionWorld.y, primaryGeo.positionWorld.z);
                             if (primaryGeo.positionWorld.x != 0 && HandGeoNode != null)
                             {
+                                
                                 HandGeoNode(PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, primaryGeo.positionWorld);
                             }
                         }
@@ -171,7 +173,7 @@ namespace nperceptual
                         {
                             pp.ReleaseFrame();
                         }
-                        Thread.Sleep(20);
+                        Thread.Sleep(40);
                     }
                 }
                 else

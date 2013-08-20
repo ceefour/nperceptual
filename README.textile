@@ -12,7 +12,7 @@ h2. Usage
 The main entry point of the library is the @PerceptualManager@ class.
 
 Sample code to display "perceptual cursor" using any WPF Shape/Component,
-with hand open-close gesture detection.
+with hand open-close ("grab") gesture detection.
 
 bc.. private readonly PerceptualManager perceptualMgr;
 

@@ -3,7 +3,7 @@ h1. nperceptual
 Finger points and gesture recognition library for
 Microsoft .NET Framework using "Intel Perceptual SDK":http://software.intel.com/en-us/vcsource/tools/perceptual-computing-sdk .
 
-h2. Requirements
+h2. Dependencies (Managed via NuGet)
 
 * "log4net":http://www.nuget.org/packages/log4net
 

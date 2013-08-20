@@ -8,8 +8,7 @@ The main entry point of the library is the @PerceptualManager@ class.
 
 Sample code to display "perceptual cursor" using any WPF Shape/Component.
 
-bc.
-public MainWindow()
+bc.. public MainWindow()
 {
     InitializeComponent();
     InitPerceptual();

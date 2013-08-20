@@ -12,14 +12,16 @@ h2. Usage
 The main entry point of the library is the @PerceptualManager@ class.
 
 Sample code to display "perceptual cursor" using any WPF Shape/Component,
-with hand open-close ("grab") gesture detection.
+with hand open-close ("grab") gesture detection, and @Button.ClickEvent@ simulation.
 
 bc.. private readonly PerceptualManager perceptualMgr;
+private readonly PerceptualAdapter perceptualAdapter;
 
 public MainWindow()
 {
     InitializeComponent();
-    perceptualMgr = new PerceptualManager(this.Dispatcher);
+    perceptualMgr = new PerceptualManager();
+    perceptualAdapter = new PerceptualAdapter(perceptualMgr, this);
     InitPerceptual();
 }
 
@@ -27,27 +29,37 @@ private void InitPerceptual()
 {
     perceptualMgr.Init();
     perceptualMgr.Start();
-    perceptualMgr.PrimaryMove = Perceptual_PrimaryMove;
-    perceptualMgr.PrimaryClose = Perceptual_PrimaryClose;
-    perceptualMgr.PrimaryOpen = Perceptual_PrimaryOpen;
+    perceptualAdapter.ExcludedControls.Add(hand);
+    perceptualAdapter.Move = Perceptual_Move;
+    perceptualAdapter.Close = Perceptual_Close;
+    perceptualAdapter.Open = Perceptual_Open;
 }
 
-private void Perceptual_PrimaryOpen(PerceptualManager sender, HandEventArgs e)
+private void Perceptual_Open(object sender, RoutedEventArgs e)
 {
-    hand.Fill = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
+    if (sender == this)
+    {
+        hand.Fill = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
+    }
 }
 
-private void Perceptual_PrimaryClose(PerceptualManager sender, HandEventArgs e)
+private void Perceptual_Close(object sender, RoutedEventArgs e)
 {
-    hand.Fill = new SolidColorBrush(Color.FromRgb(0xff, 0x33, 0));
+    if (sender == this)
+    {
+        hand.Fill = new SolidColorBrush(Color.FromRgb(0xff, 0x33, 0));
+    }
 }
 
-private void Perceptual_PrimaryMove(PerceptualManager sender, HandEventArgs e)
+private void Perceptual_Move(object sender, HandMoveEventArgs e)
 {
-    hand.Margin = new Thickness(
-        (-hand.ActualWidth / 2) + e.Left * ActualWidth,
-        (-hand.ActualHeight / 2) + e.Top * ActualHeight,
-        0, 0);
+    if (sender == this)
+    {
+        hand.Margin = new Thickness(
+            (-hand.ActualWidth / 2) + e.Location.X,
+            (-hand.ActualHeight / 2) + e.Location.Y,
+            0, 0);
+    }
 }
 
 private void Window_Unloaded(object sender, RoutedEventArgs e)

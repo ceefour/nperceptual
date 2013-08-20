@@ -9,13 +9,18 @@ using System.Windows.Threading;
 
 namespace Hendyirawan.Nperceptual
 {
+    /// <summary>
+    /// Helper for finger gesture detection.
+    /// All operations are performed in a separate thread,
+    /// and all event handlers are called in that thread.
+    /// For WPF usage, combine this with PerceptualAdapter.
+    /// </summary>
     public class PerceptualManager : IDisposable
     {
         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(typeof(PerceptualManager));
         private PXCMSession session = null;
         private bool started = false;
         private Thread thread = null;
-        private readonly Dispatcher dispatcher;
         private bool primaryCloseState = false;
 
         public delegate void HandGeoNodeHandler(PXCMGesture.GeoNode.Label label,
@@ -41,9 +46,8 @@ namespace Hendyirawan.Nperceptual
         public HandMoveHandler PrimaryClose;
         //public HandMoveHandler SecondaryMove;
 
-        public PerceptualManager(Dispatcher dispatcher)
+        public PerceptualManager()
         {
-            this.dispatcher = dispatcher;
         }
 
         public void Init()
@@ -72,6 +76,7 @@ namespace Hendyirawan.Nperceptual
             if (!started)
             {
                 thread = new Thread(DoRecognition);
+                thread.Name = "Perceptual";
                 thread.Priority = ThreadPriority.Lowest;
                 thread.Start();
             }
@@ -154,7 +159,11 @@ namespace Hendyirawan.Nperceptual
                     started = true;
                     while (started)
                     {
-                        if (!pp.AcquireFrame(true)) break;
+                        if (!pp.AcquireFrame(true))
+                        {
+                            log.Error("Cannot acquire frame");
+                            break;
+                        }
                         try
                         {
                             PXCMGesture gesture = pp.QueryGesture();
@@ -164,7 +173,7 @@ namespace Hendyirawan.Nperceptual
                             PXCMGesture.Gesture secondaryHand;
                             gesture.QueryGestureData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, 0, out primaryHand);
                             gesture.QueryGestureData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_SECONDARY, 0, out secondaryHand);
-                            Debug.WriteLine("Primary={0} {1} {2} Secondary={3} {4} {5}", primaryHand.label, primaryHand.confidence, primaryHand,
+                            log.DebugFormat("Primary={0} {1} {2} Secondary={3} {4} {5}", primaryHand.label, primaryHand.confidence, primaryHand,
                                 secondaryHand.label, secondaryHand.confidence, secondaryHand);
                             if (primaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP || secondaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP)
                             {
@@ -185,7 +194,7 @@ namespace Hendyirawan.Nperceptual
                             // GeoNode
                             PXCMGesture.GeoNode primaryGeo;
                             gesture.QueryNodeData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, out primaryGeo);
-                            log.InfoFormat("Primary Geo c={0} o={1}/{2} [{3} {4} {5}] [{6} {7} {8}]",
+                            log.DebugFormat("Primary Geo c={0} o={1}/{2} [{3} {4} {5}] [{6} {7} {8}]",
                                 primaryGeo.confidence, primaryGeo.openness, primaryGeo.opennessState,
                                 primaryGeo.positionImage.x, primaryGeo.positionImage.y, primaryGeo.positionImage.z,
                                 primaryGeo.positionWorld.x, primaryGeo.positionWorld.y, primaryGeo.positionWorld.z);
@@ -211,17 +220,11 @@ namespace Hendyirawan.Nperceptual
                                 e.PositionWorld = primaryGeo.positionWorld;
                                 if (HandGeoNode != null)
                                 {
-                                    dispatcher.InvokeAsync(delegate
-                                    {
-                                        HandGeoNode(PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, primaryGeo.positionWorld);
-                                    });
+                                    HandGeoNode(PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, primaryGeo.positionWorld);
                                 }
                                 if (PrimaryMove != null)
                                 {
-                                    dispatcher.InvokeAsync(delegate
-                                    {
-                                        PrimaryMove(this, e);
-                                    });
+                                    PrimaryMove(this, e);
                                 }
                                 // http://software.intel.com/en-us/blogs/2013/03/18/my-entries-and-lessons-learned-from-intel-perceptual-challenge-phase-i
                                 if (primaryGeo.opennessState == PXCMGesture.GeoNode.Openness.LABEL_OPEN)
@@ -231,10 +234,7 @@ namespace Hendyirawan.Nperceptual
                                         primaryCloseState = false;
                                         if (PrimaryOpen != null)
                                         {
-                                            dispatcher.InvokeAsync(delegate
-                                            {
-                                                PrimaryOpen(this, e);
-                                            });
+                                            PrimaryOpen(this, e);
                                         }
                                     }
                                 }
@@ -245,10 +245,7 @@ namespace Hendyirawan.Nperceptual
                                         primaryCloseState = true;
                                         if (PrimaryClose != null)
                                         {
-                                            dispatcher.InvokeAsync(delegate
-                                            {
-                                                PrimaryClose(this, e);
-                                            });
+                                            PrimaryClose(this, e);
                                         }
                                     }
                                 }

@@ -11,11 +11,15 @@ h2. Usage
 
 The main entry point of the library is the @PerceptualManager@ class.
 
-Sample code to display "perceptual cursor" using any WPF Shape/Component.
+Sample code to display "perceptual cursor" using any WPF Shape/Component,
+with hand open-close gesture detection.
 
-bc.. public MainWindow()
+bc.. private readonly PerceptualManager perceptualMgr;
+
+public MainWindow()
 {
     InitializeComponent();
+    perceptualMgr = new PerceptualManager(this.Dispatcher);
     InitPerceptual();
 }
 
@@ -23,7 +27,27 @@ private void InitPerceptual()
 {
     perceptualMgr.Init();
     perceptualMgr.Start();
-    perceptualMgr.HandGeoNode += HandGeoNodeHandler;
+    perceptualMgr.PrimaryMove = Perceptual_PrimaryMove;
+    perceptualMgr.PrimaryClose = Perceptual_PrimaryClose;
+    perceptualMgr.PrimaryOpen = Perceptual_PrimaryOpen;
+}
+
+private void Perceptual_PrimaryOpen(PerceptualManager sender, HandEventArgs e)
+{
+    hand.Fill = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
+}
+
+private void Perceptual_PrimaryClose(PerceptualManager sender, HandEventArgs e)
+{
+    hand.Fill = new SolidColorBrush(Color.FromRgb(0xff, 0x33, 0));
+}
+
+private void Perceptual_PrimaryMove(PerceptualManager sender, HandEventArgs e)
+{
+    hand.Margin = new Thickness(
+        (-hand.ActualWidth / 2) + e.Left * ActualWidth,
+        (-hand.ActualHeight / 2) + e.Top * ActualHeight,
+        0, 0);
 }
 
 private void Window_Unloaded(object sender, RoutedEventArgs e)
@@ -34,15 +58,4 @@ private void Window_Unloaded(object sender, RoutedEventArgs e)
 private void Window_Closed(object sender, EventArgs e)
 {
     perceptualMgr.Dispose();
-}
-
-private void HandGeoNodeHandler(PXCMGesture.GeoNode.Label label, PXCMPoint3DF32 positionWorld)
-{
-    Dispatcher.InvokeAsync(delegate()
-    {
-        hand.Margin = new Thickness(
-            (Width / 2) + (-positionWorld.x / 0.15d * (Width / 2)),
-            (Height / 2) + (-positionWorld.z / 0.15d * (Height / 2)),
-            0, 0);
-    });
 }

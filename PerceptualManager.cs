@@ -5,8 +5,9 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Threading;
 
-namespace nperceptual
+namespace Hendyirawan.Nperceptual
 {
     public class PerceptualManager : IDisposable
     {
@@ -14,11 +15,36 @@ namespace nperceptual
         private PXCMSession session = null;
         private bool started = false;
         private Thread thread = null;
+        private readonly Dispatcher dispatcher;
+        private bool primaryCloseState = false;
 
         public delegate void HandGeoNodeHandler(PXCMGesture.GeoNode.Label label,
             PXCMPoint3DF32 positionWorld);
+        /// <summary>
+        /// Event triggered when Primary hand moves.
+        /// </summary>
+        public delegate void HandMoveHandler(PerceptualManager sender, HandEventArgs e);
 
         public HandGeoNodeHandler HandGeoNode;
+        /// <summary>
+        /// Event triggered when Primary hand moves.
+        /// </summary>
+        public HandMoveHandler PrimaryMove;
+        /// <summary>
+        /// Event triggered when Primary hand opens (after closed).
+        /// By default it assumes that hand was open.
+        /// </summary>
+        public HandMoveHandler PrimaryOpen;
+        /// <summary>
+        /// Event triggered when Primary hand closes.
+        /// </summary>
+        public HandMoveHandler PrimaryClose;
+        //public HandMoveHandler SecondaryMove;
+
+        public PerceptualManager(Dispatcher dispatcher)
+        {
+            this.dispatcher = dispatcher;
+        }
 
         public void Init()
         {
@@ -163,10 +189,69 @@ namespace nperceptual
                                 primaryGeo.confidence, primaryGeo.openness, primaryGeo.opennessState,
                                 primaryGeo.positionImage.x, primaryGeo.positionImage.y, primaryGeo.positionImage.z,
                                 primaryGeo.positionWorld.x, primaryGeo.positionWorld.y, primaryGeo.positionWorld.z);
-                            if (primaryGeo.positionWorld.x != 0 && HandGeoNode != null)
+                            if (primaryGeo.positionWorld.x != 0 && primaryGeo.confidence >= 55)
                             {
-                                
-                                HandGeoNode(PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, primaryGeo.positionWorld);
+                                HandEventArgs e = new HandEventArgs();
+                                e.Hand = HandLabel.Primary;
+                                e.Left = 0.5 + (-primaryGeo.positionWorld.x / 0.15);
+                                e.Top = 0.5 + (-primaryGeo.positionWorld.z / 0.15);
+                                switch (primaryGeo.opennessState)
+                                {
+                                    case PXCMGesture.GeoNode.Openness.LABEL_OPEN:
+                                        e.Openness = HandOpenness.Open;
+                                        break;
+                                    case PXCMGesture.GeoNode.Openness.LABEL_CLOSE:
+                                        e.Openness = HandOpenness.Close;
+                                        break;
+                                    case PXCMGesture.GeoNode.Openness.LABEL_OPENNESS_ANY:
+                                        e.Openness = HandOpenness.Any;
+                                        break;
+                                }
+                                e.PositionImage = primaryGeo.positionImage;
+                                e.PositionWorld = primaryGeo.positionWorld;
+                                if (HandGeoNode != null)
+                                {
+                                    dispatcher.InvokeAsync(delegate
+                                    {
+                                        HandGeoNode(PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, primaryGeo.positionWorld);
+                                    });
+                                }
+                                if (PrimaryMove != null)
+                                {
+                                    dispatcher.InvokeAsync(delegate
+                                    {
+                                        PrimaryMove(this, e);
+                                    });
+                                }
+                                // http://software.intel.com/en-us/blogs/2013/03/18/my-entries-and-lessons-learned-from-intel-perceptual-challenge-phase-i
+                                if (primaryGeo.opennessState == PXCMGesture.GeoNode.Openness.LABEL_OPEN)
+                                {
+                                    if (primaryCloseState == true)
+                                    {
+                                        primaryCloseState = false;
+                                        if (PrimaryOpen != null)
+                                        {
+                                            dispatcher.InvokeAsync(delegate
+                                            {
+                                                PrimaryOpen(this, e);
+                                            });
+                                        }
+                                    }
+                                }
+                                if (primaryGeo.opennessState == PXCMGesture.GeoNode.Openness.LABEL_CLOSE)
+                                {
+                                    if (primaryCloseState == false)
+                                    {
+                                        primaryCloseState = true;
+                                        if (PrimaryClose != null)
+                                        {
+                                            dispatcher.InvokeAsync(delegate
+                                            {
+                                                PrimaryClose(this, e);
+                                            });
+                                        }
+                                    }
+                                }
                             }
                         }
                         finally

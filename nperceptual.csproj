@@ -7,7 +7,7 @@
     <ProjectGuid>{9252C48E-0D16-4E55-AB40-424A7202D4CE}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>nperceptual</RootNamespace>
+    <RootNamespace>Hendyirawan.Nperceptual</RootNamespace>
     <AssemblyName>nperceptual</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -45,8 +45,12 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="HandLabel.cs" />
+    <Compile Include="HandEventArgs.cs" />
+    <Compile Include="HandOpenness.cs" />
     <Compile Include="PerceptualManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

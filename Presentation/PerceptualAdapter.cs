@@ -17,14 +17,27 @@ namespace Hendyirawan.Nperceptual.Presentation
     public class PerceptualAdapter
     {
         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(typeof(PerceptualAdapter));
+        /// <summary>
+        /// Please set control's IsHitTestVisible = false.
+        /// This property may be deprecated.
+        /// </summary>
         public List<FrameworkElement> ExcludedControls = new List<FrameworkElement>();
         protected FrameworkElement parent;
 
         public delegate void HandMoveEventHandler(object sender, HandMoveEventArgs e);
 
         public HandMoveEventHandler Move;
-        public RoutedEventHandler Open;
-        public RoutedEventHandler Close;
+        public HandMoveEventHandler Open;
+        public HandMoveEventHandler Close;
+        /// <summary>
+        /// Primary Hand enters the world, usually means the cursor is now visible,
+        /// but you can use Move event for that.
+        /// </summary>
+        public RoutedEventHandler Enter;
+        /// <summary>
+        /// Primary Hand leaves the world, usually means the cursor should be hidden.
+        /// </summary>
+        public RoutedEventHandler Leave;
 
         public PerceptualAdapter(PerceptualManager perceptualMgr, FrameworkElement parent)
         {
@@ -32,6 +45,30 @@ namespace Hendyirawan.Nperceptual.Presentation
             perceptualMgr.PrimaryOpen += OnPrimaryOpen;
             perceptualMgr.PrimaryClose += OnPrimaryClose;
             perceptualMgr.PrimaryMove += OnPrimaryMove;
+            perceptualMgr.PrimaryEnter += OnPrimaryEnter;
+            perceptualMgr.PrimaryLeave += OnPrimaryLeave;
+        }
+
+        private void OnPrimaryLeave(PerceptualManager sender, HandEventArgs e)
+        {
+            if (Leave != null)
+            {
+                parent.Dispatcher.InvokeAsync(delegate
+                {
+                    Leave(parent, new RoutedEventArgs());
+                });
+            }
+        }
+
+        private void OnPrimaryEnter(PerceptualManager sender, HandEventArgs e)
+        {
+            if (Enter != null)
+            {
+                parent.Dispatcher.InvokeAsync(delegate
+                {
+                    Enter(parent, new RoutedEventArgs());
+                });
+            }
         }
 
         protected void OnPrimaryMove(PerceptualManager sender, HandEventArgs e)
@@ -39,9 +76,9 @@ namespace Hendyirawan.Nperceptual.Presentation
             if (Move != null)
             {
                 Point p = new Point(e.Left * parent.ActualWidth, e.Top * parent.ActualHeight);
-                    HandMoveEventArgs ev = new HandMoveEventArgs();
-                    ev.Location = p;
-                parent.Dispatcher.Invoke(delegate
+                HandMoveEventArgs ev = new HandMoveEventArgs();
+                ev.Location = p;
+                parent.Dispatcher.InvokeAsync(delegate
                 {
                     Move(parent, ev);
                 });
@@ -50,18 +87,26 @@ namespace Hendyirawan.Nperceptual.Presentation
 
         protected void OnPrimaryClose(PerceptualManager sender, HandEventArgs e)
         {
-            if (Close != null)
-            {
-                RoutedEventArgs ev = new RoutedEventArgs();
-                parent.Dispatcher.Invoke(delegate
-                {
-                    Close(parent, ev);
-                });
-            }
-
             Point p = new Point(e.Left * parent.ActualWidth, e.Top * parent.ActualHeight);
+            HandMoveEventArgs ev = new HandMoveEventArgs();
+            ev.Location = p;
 
-            parent.Dispatcher.Invoke(delegate
+            parent.Dispatcher.InvokeAsync(delegate
+            {
+                IInputElement el = parent.InputHitTest(p);
+                if (el != null)
+                {
+                    log.DebugFormat("CLICK hit {0}", el);
+                    el.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                }
+
+                if (Close != null)
+                {
+                        Close(parent, ev);
+                }
+            });
+
+            parent.Dispatcher.InvokeAsync(delegate
             {
                 // InputHitTest for ClickEvent
 
@@ -74,14 +119,13 @@ namespace Hendyirawan.Nperceptual.Presentation
                         }
                         else
                         {
-                            if (result.VisualHit is FrameworkElement) {
-                                ((FrameworkElement)result.VisualHit).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                            }
+                            //if (result.VisualHit is FrameworkElement) {
+                            //    ((FrameworkElement)result.VisualHit).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                            //}
 
                             log.DebugFormat("CLOSE hit {0}", result.VisualHit);
                             if (Close != null)
                             {
-                                RoutedEventArgs ev = new RoutedEventArgs();
                                 Close(result.VisualHit, ev);
                             }
                             return HitTestResultBehavior.Continue;
@@ -92,17 +136,19 @@ namespace Hendyirawan.Nperceptual.Presentation
 
         protected void OnPrimaryOpen(PerceptualManager sender, HandEventArgs e)
         {
+            Point p = new Point(e.Left * parent.ActualWidth, e.Top * parent.ActualHeight);
+            HandMoveEventArgs ev = new HandMoveEventArgs();
+            ev.Location = p;
+
             if (Open != null)
             {
-                RoutedEventArgs ev = new RoutedEventArgs();
-                parent.Dispatcher.Invoke(delegate
+                parent.Dispatcher.InvokeAsync(delegate
                 {
                     Open(parent, ev);
                 });
             }
 
-            Point p = new Point(e.Left * parent.ActualWidth, e.Top * parent.ActualHeight);
-            parent.Dispatcher.Invoke(delegate
+            parent.Dispatcher.InvokeAsync(delegate
             {
                 VisualTreeHelper.HitTest(parent, null,
                     new HitTestResultCallback(delegate(HitTestResult result)
@@ -116,7 +162,6 @@ namespace Hendyirawan.Nperceptual.Presentation
                             log.DebugFormat("OPEN hit {0}", result.VisualHit);
                             if (Open != null)
                             {
-                                RoutedEventArgs ev = new RoutedEventArgs();
                                 Open(result.VisualHit, ev);
                             }
                             return HitTestResultBehavior.Continue;

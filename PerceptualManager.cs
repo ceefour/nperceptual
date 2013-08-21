@@ -22,6 +22,7 @@ namespace Hendyirawan.Nperceptual
         private bool started = false;
         private Thread thread = null;
         private bool primaryCloseState = false;
+        private bool primaryEntered = false;
 
         public delegate void HandGeoNodeHandler(PXCMGesture.GeoNode.Label label,
             PXCMPoint3DF32 positionWorld);
@@ -29,6 +30,10 @@ namespace Hendyirawan.Nperceptual
         /// Event triggered when Primary hand moves.
         /// </summary>
         public delegate void HandMoveHandler(PerceptualManager sender, HandEventArgs e);
+
+        public Action Initialized;
+        public Action AcquireFailed;
+        public Action InitializeFailed;
 
         public HandGeoNodeHandler HandGeoNode;
         /// <summary>
@@ -45,6 +50,15 @@ namespace Hendyirawan.Nperceptual
         /// </summary>
         public HandMoveHandler PrimaryClose;
         //public HandMoveHandler SecondaryMove;
+        /// <summary>
+        /// Primary Hand enters the world, usually means the cursor is now visible,
+        /// but you can use Move event for that.
+        /// </summary>
+        public HandMoveHandler PrimaryEnter;
+        /// <summary>
+        /// Primary Hand leaves the world, usually means the cursor should be hidden.
+        /// </summary>
+        public HandMoveHandler PrimaryLeave;
 
         public PerceptualManager()
         {
@@ -77,7 +91,6 @@ namespace Hendyirawan.Nperceptual
             {
                 thread = new Thread(DoRecognition);
                 thread.Name = "Perceptual";
-                thread.Priority = ThreadPriority.Lowest;
                 thread.Start();
             }
         }
@@ -97,177 +110,223 @@ namespace Hendyirawan.Nperceptual
         /// </summary>
         private void DoRecognition()
         {
-            String deviceName = "";
-            int iuid = 0;
-
-            {
-                PXCMSession.ImplDesc desc = new PXCMSession.ImplDesc();
-                desc.group = PXCMSession.ImplGroup.IMPL_GROUP_SENSOR;
-                desc.subgroup = PXCMSession.ImplSubgroup.IMPL_SUBGROUP_VIDEO_CAPTURE;
-                for (uint i = 0; ; i++)
-                {
-                    PXCMSession.ImplDesc desc1;
-                    if (session.QueryImpl(ref desc, i, out desc1) < pxcmStatus.PXCM_STATUS_NO_ERROR) break;
-                    log.DebugFormat("Desc {0}", desc1);
-                    PXCMCapture capture;
-                    if (session.CreateImpl<PXCMCapture>(ref desc1, PXCMCapture.CUID, out capture) < pxcmStatus.PXCM_STATUS_NO_ERROR) continue;
-                    log.DebugFormat("Capture {0}", capture);
-                    try
-                    {
-                        for (uint j = 0; ; j++)
-                        {
-                            PXCMCapture.DeviceInfo dinfo;
-                            if (capture.QueryDevice(j, out dinfo) < pxcmStatus.PXCM_STATUS_NO_ERROR) break;
-                            log.DebugFormat("DeviceInfo #{0}: {1} {2} {3}", j + 1, dinfo.did, dinfo.name, dinfo);
-                            if (i == 0)
-                            {
-                                // only use first device, "Creative GestureCam" doesn't work
-                                deviceName = dinfo.name.get();
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        capture.Dispose();
-                    }
-                }
-
-            }
-
-            {
-                PXCMSession.ImplDesc desc = new PXCMSession.ImplDesc();
-                desc.cuids[0] = PXCMGesture.CUID;
-                for (uint i = 0; ; i++)
-                {
-                    PXCMSession.ImplDesc desc1;
-                    if (session.QueryImpl(ref desc, i, out desc1) < pxcmStatus.PXCM_STATUS_NO_ERROR) break;
-                    log.DebugFormat("Module #{0}: {1} {2}", i + 1, desc1.iuid, desc1.friendlyName.get());
-                    iuid = desc1.iuid;
-                }
-            }
-
-            UtilMPipeline pp = new UtilMPipeline();
-            log.InfoFormat("SetFilter {0}", (object)deviceName);
-            pp.QueryCapture().SetFilter(deviceName);
-            log.InfoFormat("Enabling gesture for {0}", iuid);
-            pp.EnableGesture(iuid);
             try
             {
-                if (pp.Init())
+                String deviceName = "";
+                int iuid = 0;
+
                 {
-                    log.Info("Initialized Perceptual");
-                    started = true;
-                    while (started)
+                    PXCMSession.ImplDesc desc = new PXCMSession.ImplDesc();
+                    desc.group = PXCMSession.ImplGroup.IMPL_GROUP_SENSOR;
+                    desc.subgroup = PXCMSession.ImplSubgroup.IMPL_SUBGROUP_VIDEO_CAPTURE;
+                    for (uint i = 0; ; i++)
                     {
-                        if (!pp.AcquireFrame(true))
-                        {
-                            log.Error("Cannot acquire frame");
-                            break;
-                        }
+                        PXCMSession.ImplDesc desc1;
+                        if (session.QueryImpl(ref desc, i, out desc1) < pxcmStatus.PXCM_STATUS_NO_ERROR) break;
+                        log.DebugFormat("Desc {0}", desc1);
+                        PXCMCapture capture;
+                        if (session.CreateImpl<PXCMCapture>(ref desc1, PXCMCapture.CUID, out capture) < pxcmStatus.PXCM_STATUS_NO_ERROR) continue;
+                        log.DebugFormat("Capture {0}", capture);
                         try
                         {
-                            PXCMGesture gesture = pp.QueryGesture();
-
-                            // Pose
-                            PXCMGesture.Gesture primaryHand;
-                            PXCMGesture.Gesture secondaryHand;
-                            gesture.QueryGestureData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, 0, out primaryHand);
-                            gesture.QueryGestureData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_SECONDARY, 0, out secondaryHand);
-                            log.DebugFormat("Primary={0} {1} {2} Secondary={3} {4} {5}", primaryHand.label, primaryHand.confidence, primaryHand,
-                                secondaryHand.label, secondaryHand.confidence, secondaryHand);
-                            if (primaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP || secondaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP)
+                            for (uint j = 0; ; j++)
                             {
-                                log.InfoFormat("Pose {0}", PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP);
-                                //Dispatcher.InvokeAsync(ThumbsUp);
-                            }
-                            else if (primaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_DOWN || secondaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_DOWN)
-                            {
-                                log.InfoFormat("Pose {0}", PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_DOWN);
-                                //Dispatcher.InvokeAsync(ThumbsDown);
-                            }
-                            else if (primaryHand.label == PXCMGesture.Gesture.Label.LABEL_HAND_WAVE || secondaryHand.label == PXCMGesture.Gesture.Label.LABEL_HAND_WAVE)
-                            {
-                                log.InfoFormat("Pose {0}", PXCMGesture.Gesture.Label.LABEL_HAND_WAVE);
-                                //Dispatcher.InvokeAsync(Wave);
-                            }
-
-                            // GeoNode
-                            PXCMGesture.GeoNode primaryGeo;
-                            gesture.QueryNodeData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, out primaryGeo);
-                            log.DebugFormat("Primary Geo c={0} o={1}/{2} [{3} {4} {5}] [{6} {7} {8}]",
-                                primaryGeo.confidence, primaryGeo.openness, primaryGeo.opennessState,
-                                primaryGeo.positionImage.x, primaryGeo.positionImage.y, primaryGeo.positionImage.z,
-                                primaryGeo.positionWorld.x, primaryGeo.positionWorld.y, primaryGeo.positionWorld.z);
-                            if (primaryGeo.positionWorld.x != 0 && primaryGeo.confidence >= 55)
-                            {
-                                HandEventArgs e = new HandEventArgs();
-                                e.Hand = HandLabel.Primary;
-                                e.Left = 0.5 + (-primaryGeo.positionWorld.x / 0.15);
-                                e.Top = 0.5 + (-primaryGeo.positionWorld.z / 0.15);
-                                switch (primaryGeo.opennessState)
+                                PXCMCapture.DeviceInfo dinfo;
+                                if (capture.QueryDevice(j, out dinfo) < pxcmStatus.PXCM_STATUS_NO_ERROR) break;
+                                log.DebugFormat("DeviceInfo #{0}: {1} {2} {3}", j + 1, dinfo.did, dinfo.name, dinfo);
+                                if (i == 0)
                                 {
-                                    case PXCMGesture.GeoNode.Openness.LABEL_OPEN:
-                                        e.Openness = HandOpenness.Open;
-                                        break;
-                                    case PXCMGesture.GeoNode.Openness.LABEL_CLOSE:
-                                        e.Openness = HandOpenness.Close;
-                                        break;
-                                    case PXCMGesture.GeoNode.Openness.LABEL_OPENNESS_ANY:
-                                        e.Openness = HandOpenness.Any;
-                                        break;
-                                }
-                                e.PositionImage = primaryGeo.positionImage;
-                                e.PositionWorld = primaryGeo.positionWorld;
-                                if (HandGeoNode != null)
-                                {
-                                    HandGeoNode(PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, primaryGeo.positionWorld);
-                                }
-                                if (PrimaryMove != null)
-                                {
-                                    PrimaryMove(this, e);
-                                }
-                                // http://software.intel.com/en-us/blogs/2013/03/18/my-entries-and-lessons-learned-from-intel-perceptual-challenge-phase-i
-                                if (primaryGeo.opennessState == PXCMGesture.GeoNode.Openness.LABEL_OPEN)
-                                {
-                                    if (primaryCloseState == true)
-                                    {
-                                        primaryCloseState = false;
-                                        if (PrimaryOpen != null)
-                                        {
-                                            PrimaryOpen(this, e);
-                                        }
-                                    }
-                                }
-                                if (primaryGeo.opennessState == PXCMGesture.GeoNode.Openness.LABEL_CLOSE)
-                                {
-                                    if (primaryCloseState == false)
-                                    {
-                                        primaryCloseState = true;
-                                        if (PrimaryClose != null)
-                                        {
-                                            PrimaryClose(this, e);
-                                        }
-                                    }
+                                    // only use first device, "Creative GestureCam" doesn't work
+                                    deviceName = dinfo.name.get();
                                 }
                             }
                         }
                         finally
                         {
-                            pp.ReleaseFrame();
+                            capture.Dispose();
                         }
-                        Thread.Sleep(40);
+                    }
+
+                }
+
+                {
+                    PXCMSession.ImplDesc desc = new PXCMSession.ImplDesc();
+                    desc.cuids[0] = PXCMGesture.CUID;
+                    for (uint i = 0; ; i++)
+                    {
+                        PXCMSession.ImplDesc desc1;
+                        if (session.QueryImpl(ref desc, i, out desc1) < pxcmStatus.PXCM_STATUS_NO_ERROR) break;
+                        log.DebugFormat("Module #{0}: {1} {2}", i + 1, desc1.iuid, desc1.friendlyName.get());
+                        iuid = desc1.iuid;
                     }
                 }
-                else
+
+                UtilMPipeline pp = new UtilMPipeline();
+                log.InfoFormat("SetFilter {0}", (object)deviceName);
+                pp.QueryCapture().SetFilter(deviceName);
+                log.InfoFormat("Enabling gesture for {0}", iuid);
+                pp.EnableGesture(iuid);
+                try
                 {
-                    log.Warn("Cannot Init");
+                    if (pp.Init())
+                    {
+                        log.Info("Initialized Perceptual");
+                        started = true;
+                        if (Initialized != null)
+                        {
+                            Initialized();
+                        }
+                        while (started)
+                        {
+                            if (!pp.AcquireFrame(true))
+                            {
+                                log.Error("Cannot acquire frame");
+                                if (AcquireFailed != null)
+                                {
+                                    AcquireFailed();
+                                }
+                                break;
+                            }
+                            try
+                            {
+                                PXCMGesture gesture = pp.QueryGesture();
+
+                                // Pose
+                                PXCMGesture.Gesture primaryHand;
+                                PXCMGesture.Gesture secondaryHand;
+                                gesture.QueryGestureData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, 0, out primaryHand);
+                                gesture.QueryGestureData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_SECONDARY, 0, out secondaryHand);
+                                log.DebugFormat("Primary={0} {1} {2} Secondary={3} {4} {5}", primaryHand.label, primaryHand.confidence, primaryHand,
+                                    secondaryHand.label, secondaryHand.confidence, secondaryHand);
+                                if (primaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP || secondaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP)
+                                {
+                                    log.InfoFormat("Pose {0}", PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_UP);
+                                    //Dispatcher.InvokeAsync(ThumbsUp);
+                                }
+                                else if (primaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_DOWN || secondaryHand.label == PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_DOWN)
+                                {
+                                    log.InfoFormat("Pose {0}", PXCMGesture.Gesture.Label.LABEL_POSE_THUMB_DOWN);
+                                    //Dispatcher.InvokeAsync(ThumbsDown);
+                                }
+                                else if (primaryHand.label == PXCMGesture.Gesture.Label.LABEL_HAND_WAVE || secondaryHand.label == PXCMGesture.Gesture.Label.LABEL_HAND_WAVE)
+                                {
+                                    log.InfoFormat("Pose {0}", PXCMGesture.Gesture.Label.LABEL_HAND_WAVE);
+                                    //Dispatcher.InvokeAsync(Wave);
+                                }
+
+                                // GeoNode
+                                PXCMGesture.GeoNode primaryGeo;
+                                gesture.QueryNodeData(0, PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, out primaryGeo);
+                                log.DebugFormat("Primary Geo c={0} o={1}/{2} [{3} {4} {5}] [{6} {7} {8}]",
+                                    primaryGeo.confidence, primaryGeo.openness, primaryGeo.opennessState,
+                                    primaryGeo.positionImage.x, primaryGeo.positionImage.y, primaryGeo.positionImage.z,
+                                    primaryGeo.positionWorld.x, primaryGeo.positionWorld.y, primaryGeo.positionWorld.z);
+                                if (primaryGeo.positionWorld.x != 0 && primaryGeo.confidence >= 55)
+                                {
+                                    HandEventArgs e = new HandEventArgs();
+                                    e.Hand = HandLabel.Primary;
+                                    e.Left = 0.5 + (-primaryGeo.positionWorld.x / 0.15);
+                                    e.Top = 0.5 + (-primaryGeo.positionWorld.z / 0.15);
+                                    switch (primaryGeo.opennessState)
+                                    {
+                                        case PXCMGesture.GeoNode.Openness.LABEL_OPEN:
+                                            e.Openness = HandOpenness.Open;
+                                            break;
+                                        case PXCMGesture.GeoNode.Openness.LABEL_CLOSE:
+                                            e.Openness = HandOpenness.Close;
+                                            break;
+                                        case PXCMGesture.GeoNode.Openness.LABEL_OPENNESS_ANY:
+                                            e.Openness = HandOpenness.Any;
+                                            break;
+                                    }
+                                    e.PositionImage = primaryGeo.positionImage;
+                                    e.PositionWorld = primaryGeo.positionWorld;
+
+                                    if (!primaryEntered)
+                                    {
+                                        primaryEntered = true;
+                                        if (PrimaryEnter != null)
+                                        {
+                                            PrimaryEnter(this, e);
+                                        }
+                                    }
+
+                                    if (HandGeoNode != null)
+                                    {
+                                        HandGeoNode(PXCMGesture.GeoNode.Label.LABEL_BODY_HAND_PRIMARY, primaryGeo.positionWorld);
+                                    }
+                                    if (PrimaryMove != null)
+                                    {
+                                        PrimaryMove(this, e);
+                                    }
+                                    // http://software.intel.com/en-us/blogs/2013/03/18/my-entries-and-lessons-learned-from-intel-perceptual-challenge-phase-i
+                                    if (primaryGeo.opennessState == PXCMGesture.GeoNode.Openness.LABEL_OPEN)
+                                    {
+                                        if (primaryCloseState == true)
+                                        {
+                                            primaryCloseState = false;
+                                            if (PrimaryOpen != null)
+                                            {
+                                                PrimaryOpen(this, e);
+                                            }
+                                        }
+                                    }
+                                    if (primaryGeo.opennessState == PXCMGesture.GeoNode.Openness.LABEL_CLOSE)
+                                    {
+                                        if (primaryCloseState == false)
+                                        {
+                                            primaryCloseState = true;
+                                            if (PrimaryClose != null)
+                                            {
+                                                PrimaryClose(this, e);
+                                            }
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    if (primaryEntered)
+                                    {
+                                        primaryEntered = false;
+                                        if (PrimaryLeave != null)
+                                        {
+                                            HandEventArgs e = new HandEventArgs();
+                                            e.Hand = HandLabel.Primary;
+                                            PrimaryLeave(this, e);
+                                        }
+                                    }
+                                }
+                            }
+                            finally
+                            {
+                                pp.ReleaseFrame();
+                            }
+                            Thread.Sleep(40);
+                        }
+                    }
+                    else
+                    {
+                        log.Error("Cannot initialize, check Perceptual Device is installed properly");
+                        if (InitializeFailed != null)
+                        {
+                            InitializeFailed();
+                        }
+                    }
+                }
+                finally
+                {
+                    pp.Close();
+                    pp.Dispose();
+                    log.Info("Disposed.");
                 }
             }
-            finally
+            catch (Exception ex)
             {
-                pp.Close();
-                pp.Dispose();
-                log.Info("Disposed.");
+                log.Error("Cannot initialize, check Perceptual Device is installed properly", ex);
+                if (InitializeFailed != null)
+                {
+                    InitializeFailed();
+                }
             }
         }
 

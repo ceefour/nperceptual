@@ -1,20 +1,21 @@
-h1. nperceptual
+# nperceptual
 
 Finger points and gesture recognition library for
-Microsoft .NET Framework using "Intel Perceptual SDK":http://software.intel.com/en-us/vcsource/tools/perceptual-computing-sdk .
+Microsoft .NET Framework using [Intel Perceptual SDK](http://software.intel.com/en-us/vcsource/tools/perceptual-computing-sdk).
 
-h2. Dependencies (Managed via NuGet)
+## Dependencies (Managed via NuGet)
 
-* "log4net":http://www.nuget.org/packages/log4net
+* [log4net](http://www.nuget.org/packages/log4net)
 
-h2. Usage
+## Usage
 
-The main entry point of the library is the @PerceptualManager@ class.
+The main entry point of the library is the `PerceptualManager` class.
 
 Sample code to display "perceptual cursor" using any WPF Shape/Component,
-with hand open-close ("grab") gesture detection, and @Button.ClickEvent@ simulation.
+with hand open-close ("grab") gesture detection, and `Button.ClickEvent` simulation.
 
-bc.. private readonly PerceptualManager perceptualMgr;
+```cs
+private readonly PerceptualManager perceptualMgr;
 private readonly PerceptualAdapter perceptualAdapter;
 
 public MainWindow()
@@ -71,3 +72,4 @@ private void Window_Closed(object sender, EventArgs e)
 {
     perceptualMgr.Dispose();
 }
+```
